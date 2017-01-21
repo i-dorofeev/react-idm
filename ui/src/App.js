@@ -1,12 +1,8 @@
-import React, { Component } from 'react';
+import React from 'react';
 import PersonTable from './PersonTable';
 
-class App extends Component {
-  render() {
-    return (
-        <PersonTable />
-    );
-  }
-}
+const  App = () => (
+    <PersonTable />
+);
 
 export default App;

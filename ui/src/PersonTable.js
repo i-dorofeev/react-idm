@@ -1,30 +1,29 @@
-import React, { Component } from 'react';
+import React from 'react';
+import { connect } from 'react-redux';
+import PersonTableRow from './PersonTableRow';
 
-class PersonTable extends Component {
-    render() {
-        return (
-            <table className="table">
-                <thead>
-                    <tr>
-                        <th>First name</th>
-                        <th>Last name</th>
-                    </tr>
-                </thead>
+const mapStateToProps = (state) => {
+    return { "data": state.people };
+};
 
-                <tbody>
-                    <tr>
-                        <td>Ilya</td>
-                        <td>Dorofeev</td>
-                    </tr>
-                    <tr>
-                        <td>Alexey</td>
-                        <td>Hrennikov</td>
-                    </tr>
-                </tbody>
-            </table>
-        );
-    }
-}
+const PersonTableDisconnected = ({ data }) => (
+    <table className="table">
+        <thead>
+            <tr>
+                <th>First name</th>
+                <th>Last name</th>
+            </tr>
+        </thead>
+
+        <tbody>
+        {data.map(item =>
+            <PersonTableRow key={item.id} {...item} />
+        )}
+        </tbody>
+    </table>
+);
+
+const PersonTable = connect(mapStateToProps)(PersonTableDisconnected);
 
 export default PersonTable;
 
