@@ -6,7 +6,7 @@ const mapStateToProps = (state) => {
     return { "data": state.people };
 };
 
-const PersonTableDisconnected = ({ data }) => (
+const _PersonTable = ({ data }) => (
     <table className="table">
         <thead>
             <tr>
@@ -23,7 +23,7 @@ const PersonTableDisconnected = ({ data }) => (
     </table>
 );
 
-const PersonTable = connect(mapStateToProps)(PersonTableDisconnected);
+const PersonTable = connect(mapStateToProps)(_PersonTable);
 
 export default PersonTable;
 
