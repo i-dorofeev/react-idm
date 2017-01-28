@@ -1,12 +1,7 @@
 import React from 'react';
-import { connect } from 'react-redux';
 import PersonTableRow from './PersonTableRow';
 
-const mapStateToProps = (state) => {
-    return { "data": state.people };
-};
-
-const _PersonTable = ({ data }) => (
+const PersonTable = ({ data }) => (
     <table className="table">
         <thead>
             <tr>
@@ -22,8 +17,6 @@ const _PersonTable = ({ data }) => (
         </tbody>
     </table>
 );
-
-const PersonTable = connect(mapStateToProps)(_PersonTable);
 
 export default PersonTable;
 

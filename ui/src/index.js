@@ -1,15 +1,29 @@
+import 'babel-polyfill'
+
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { createStore, applyMiddleware } from 'redux';
-import { Provider } from 'react-redux';
-import { reducer } from './reducers';
-import App from './App';
-import './index.css';
-import 'bootstrap/dist/css/bootstrap.css';
-import 'bootstrap/dist/css/bootstrap-theme.css';
-import { fetchPeople } from "./actions";
+import { createStore, applyMiddleware, combineReducers} from 'redux';
+import { Provider, connect } from 'react-redux';
 import thunk from 'redux-thunk';
-import 'babel-polyfill'
+
+import PeopleComponent from './People';
+import Header from './Header';
+
+import * as reducers from './ducks/index';
+import { setData as refreshPersonList } from "./ducks/people/personList";
+
+let reducer = combineReducers(reducers);
+
+// Connected components
+
+const mapStateToPeopleProps = (state) => {
+    return { personTableData: state.people.personList };
+};
+
+const People = connect(mapStateToPeopleProps)(PeopleComponent);
+
+
+// Application
 
 let store = createStore(
     reducer,
@@ -18,10 +32,23 @@ let store = createStore(
 
 ReactDOM.render(
     <Provider store={store}>
-        <App />
+        <div>
+            <Header />
+            <People />
+        </div>
     </Provider>,
-  document.getElementById('root')
+    document.getElementById('root')
 );
 
-
 store.dispatch(fetchPeople());
+
+function fetchPeople() {
+
+    return function(dispatch) {
+
+        fetch('http://localhost:8080/people')
+            .then(response => response.json())
+            .then(json => dispatch(refreshPersonList(json)));
+    }
+
+}
