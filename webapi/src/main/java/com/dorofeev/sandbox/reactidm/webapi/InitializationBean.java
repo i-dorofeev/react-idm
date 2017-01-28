@@ -17,9 +17,12 @@ public class InitializationBean {
 
 	@PostConstruct
 	public void initialize() {
-		peopleRepository.save(new Person("1", "Ilya", "Dorofeev"));
-		peopleRepository.save(new Person("2", "Boris", "Romanov"));
-		peopleRepository.save(new Person("3", "Nickolay", "Romanov"));
+		/*
 
+		Random random = new Random();
+		peopleRepository.save(new Person(Integer.toString(random.nextInt()), "Ilya", "Dorofeev"));
+		peopleRepository.save(new Person(Integer.toString(random.nextInt()), "Boris", "Romanov"));
+		peopleRepository.save(new Person(Integer.toString(random.nextInt()), "Nickolay", "Romanov"));
+		*/
 	}
 }
