@@ -1,4 +1,5 @@
 import React from 'react';
+import { connect } from 'react-redux';
 import PersonTableRow from './PersonTableRow';
 
 const PersonTable = ({ data }) => (
@@ -18,5 +19,12 @@ const PersonTable = ({ data }) => (
     </table>
 );
 
-export default PersonTable;
+// Connected components
+const mapStateToPersonTableProps = (state) => {
+    return {
+        data: state.people.personList
+    };
+};
+
+export default connect(mapStateToPersonTableProps)(PersonTable);
 

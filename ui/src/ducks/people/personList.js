@@ -1,5 +1,5 @@
 // Actions
-const DATA_SET = 'DATA_SET';
+const DATA_SET = 'reactIdm/people/personList/DATA_SET';
 
 // Reducer
 export default function personList(state = [], action) {
