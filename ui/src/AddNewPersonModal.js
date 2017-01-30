@@ -10,7 +10,7 @@ class AddNewPersonModal extends Component {
 
     render() {
         return (
-            <Modal show={this.props.isActive}>
+            <Modal show={this.props.isActive} onHide={this.props.hide}>
                 <Modal.Header closeButton>
                     <Modal.Title>Add new person</Modal.Title>
                 </Modal.Header>
