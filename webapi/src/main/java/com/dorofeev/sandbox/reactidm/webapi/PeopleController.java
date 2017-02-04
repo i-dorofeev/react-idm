@@ -25,9 +25,8 @@ public class PeopleController {
 		peopleRepository.save(new Person(person.getFirstName(), person.getLastName()));
 	}
 
-
 	@Data
-	public static class PersonDTO {
+	private static class PersonDTO {
 		private String firstName;
 		private String lastName;
 	}
