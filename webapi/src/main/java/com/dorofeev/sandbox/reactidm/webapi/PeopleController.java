@@ -1,9 +1,8 @@
 package com.dorofeev.sandbox.reactidm.webapi;
 
+import lombok.Data;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.CrossOrigin;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @CrossOrigin(origins = "http://localhost:3000")
@@ -19,6 +18,18 @@ public class PeopleController {
 	@GetMapping("/people")
 	public Iterable<Person> getPeople() {
 		return peopleRepository.findAll();
+	}
+
+	@PutMapping(value = "/people")
+	public void addPerson(@RequestBody PersonDTO person) {
+		peopleRepository.save(new Person(person.getFirstName(), person.getLastName()));
+	}
+
+
+	@Data
+	public static class PersonDTO {
+		private String firstName;
+		private String lastName;
 	}
 
 }

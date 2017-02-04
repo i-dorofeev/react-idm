@@ -10,11 +10,8 @@ import People from './People';
 import Header from './Header';
 
 import * as reducers from './ducks/index';
-import { setData as refreshPersonList } from "./ducks/people/personList";
 
 let reducer = combineReducers(reducers);
-
-// Application
 
 let store = createStore(
     reducer,
@@ -30,16 +27,3 @@ ReactDOM.render(
     </Provider>,
     document.getElementById('root')
 );
-
-store.dispatch(fetchPeople());
-
-function fetchPeople() {
-
-    return function(dispatch) {
-
-        fetch('http://localhost:8080/people')
-            .then(response => response.json())
-            .then(json => dispatch(refreshPersonList(json)));
-    }
-
-}
