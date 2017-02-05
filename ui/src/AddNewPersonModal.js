@@ -2,7 +2,8 @@ import React from 'react';
 import { connect } from 'react-redux';
 
 import { Button, Modal, FormGroup, FormControl, ControlLabel } from 'react-bootstrap';
-import {setFirstName, setLastName} from "./ducks/people/addNewPersonModal";
+import {setFirstName, setLastName, hideModal} from "./ducks/people/addNewPersonModal";
+import {addNewPerson} from "./api";
 
 class AddNewPersonModal extends React.Component {
 
@@ -12,6 +13,11 @@ class AddNewPersonModal extends React.Component {
 
     updateLastName = (e) => {
         this.props.setLastName(e.target.value);
+    };
+
+    save = () => {
+        addNewPerson(this.props.firstName, this.props.lastName)
+            .then(() => this.props.onNewPersonAdded());
     };
 
     render() {
@@ -43,7 +49,7 @@ class AddNewPersonModal extends React.Component {
                     </form>
                 </Modal.Body>
                 <Modal.Footer>
-                    <Button onClick={() => this.props.onSave(this.props.firstName, this.props.lastName)} bsStyle="primary">Save</Button>
+                    <Button onClick={() => this.save()} bsStyle="primary">Save</Button>
                     <Button onClick={this.props.onClose}>Cancel</Button>
                 </Modal.Footer>
             </Modal>
@@ -58,7 +64,7 @@ AddNewPersonModal.propTypes = {
     setFirstName: React.PropTypes.func,
     setLastName: React.PropTypes.func,
     onClose: React.PropTypes.func,
-    onSave: React.PropTypes.func
+    onNewPersonAdded: React.PropTypes.func
 };
 
 
@@ -70,7 +76,8 @@ const mapStateToProps = (state) => {
 const mapDispatchToProps = (dispatch) => {
     return {
         setFirstName: (firstName) => { dispatch(setFirstName(firstName)); },
-        setLastName:  (lastName) =>  { dispatch(setLastName (lastName )); }
+        setLastName:  (lastName) =>  { dispatch(setLastName (lastName )); },
+        onClose: () => { dispatch(hideModal()); }
     }
 };
 
