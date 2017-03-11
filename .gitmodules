@@ -1,0 +1,4 @@
+[submodule "connector-ldap"]
+	path = connector-ldap
+	url = https://github.com/Evolveum/connector-ldap
+	branch = hotfix-1.4.2.18
