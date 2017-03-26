@@ -2,7 +2,7 @@ package com.dorofeev.sandbox.reactidm.core
 
 import java.io.File
 
-import com.dorofeev.sandbox.reactidm.core.Main.ResourceObject
+import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
 import org.identityconnectors.common.IOUtil
 import org.identityconnectors.common.security.GuardedString
 import org.identityconnectors.framework.api._
@@ -43,17 +43,17 @@ object LdapConnector {
     connector = ConnectorFacadeFactory.getInstance.newInstance(apiConfig)
   }
 
-  def search(objectClass: String, onResourceObject: ResourceObject => Unit, onFinished: () => Unit): Unit = {
+  def search(objectClass: String, onConnectorObject: org.identityconnectors.framework.common.objects.ConnectorObject => Unit, onFinished: () => Unit): Unit = {
     val searchApiOp = connector.getOperation(classOf[SearchApiOp]).asInstanceOf[SearchApiOp]
     searchApiOp.search(new ObjectClass(objectClass), null,
       new SearchResultsHandler {
-        override def handle(connectorObject: ConnectorObject): Boolean = {
-          onResourceObject(ResourceObject(connectorObject.getUid.getUidValue, connectorObject.getName.getNameValue, connectorObject.getObjectClass.getObjectClassValue))
-          true
-        }
-
         override def handleResult(searchResult: SearchResult): Unit = {
           onFinished()
+        }
+
+        override def handle(connectorObject: org.identityconnectors.framework.common.objects.ConnectorObject): Boolean = {
+          onConnectorObject(connectorObject)
+          true
         }
       }, null)
   }
@@ -80,7 +80,7 @@ object LdapConnector {
     }, null)
   }
 
-  private def asResourceObject(syncDelta: SyncDelta) = ResourceObject(syncDelta.getUid.getUidValue, "", syncDelta.getObjectClass.getObjectClassValue)
+  private def asResourceObject(syncDelta: SyncDelta) = MyConnectorObject(syncDelta.getUid.getUidValue, "", syncDelta.getObjectClass.getObjectClassValue)
 
   def printConnectorInfo(ci: ConnectorInfo): Unit = {
     println("Key: " + ci.getConnectorKey)
@@ -91,6 +91,6 @@ object LdapConnector {
 
 abstract class SynchronizationEventHandler {
 
-  def onCreateOrUpdate(resourceObject: ResourceObject)
-  def onDelete(resourceObject: ResourceObject)
+  def onCreateOrUpdate(resourceObject: MyConnectorObject)
+  def onDelete(resourceObject: MyConnectorObject)
 }

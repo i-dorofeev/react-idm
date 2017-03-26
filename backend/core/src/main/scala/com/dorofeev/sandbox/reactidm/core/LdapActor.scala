@@ -1,50 +1,115 @@
 package com.dorofeev.sandbox.reactidm.core
 
-import java.util.concurrent.TimeUnit
+import akka.actor.{Actor, ActorRef, Cancellable, PoisonPill, Props}
+import com.dorofeev.sandbox.reactidm.core.ConnectorObjectManagerActor.Removed
+import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
+import org.identityconnectors.framework.common.objects.{ConnectorObject, SyncToken, Uid}
 
-import akka.actor.{Actor, ActorRef, ActorSelection, Cancellable, Props}
-import com.dorofeev.sandbox.reactidm.core.Main.ResourceObject
-import org.identityconnectors.framework.common.objects.SyncToken
-
+import scala.collection.mutable
 import scala.concurrent.duration._
 import scala.language.postfixOps
 
-class LdapActor(val reconciliationActorSelection: ActorSelection) extends Actor {
+object LdapActorInternalCommands {
 
-  import context.dispatcher
+}
 
-  var reconciliationActor: ActorRef = _
-  var liveSyncActor: ActorRef = _
+class LdapActor() extends Actor {
 
-  @scala.throws[Exception](classOf[Exception])
   override def preStart(): Unit = {
     LdapConnector.initConnector()
-    reconciliationActorSelection.resolveOne(FiniteDuration(10, TimeUnit.SECONDS))
-      .onSuccess({ case ref =>
-        liveSyncActor = context.actorOf(Props(new LdapLiveSyncActor()))
-        reconciliationActor = ref
-      })
+
+    val connectorObjectManagerActor = context.actorOf(Props(new ConnectorObjectManagerActor()))
+    context.actorOf(Props(new ReconciliationActor(connectorObjectManagerActor)))
+
     super.preStart()
   }
 
   override def receive: Receive = {
+    case _ =>
+  }
+}
 
-    case msg =>
-      if (sender() == liveSyncActor)
-        receiveLiveSyncMsg(msg)
-      else
-        receiveExternalMsg(msg)
+class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
+
+  object ReconcileCmd
+
+  import context.dispatcher
+
+  var tick: Cancellable = _
+  var reconciliationList: List[Uid] = List()
+
+  override def preStart(): Unit = {
+    tick = context.system.scheduler.schedule(1 seconds, 5 seconds, self, ReconcileCmd)
+    super.preStart()
   }
 
-  private def receiveLiveSyncMsg: Receive = {
-    case msg => reconciliationActor ! msg
-  }
-
-  private def receiveExternalMsg: Receive = {
+  override def receive: Receive = {
     case ReconcileCmd =>
+
+      var list = List[Uid]()
+      
+      println("starting reconciliation...")
+
       LdapConnector.search("inetOrgPerson",
-        resourceObj => sender() ! ReconciliationObject(resourceObj),
-        () => sender() ! ReconciliationFinished)
+        connectorObject => {
+          list = connectorObject.getUid :: list
+          connectorObjectManager ! connectorObject
+        },
+        () => {
+          val removed = reconciliationList.filterNot(list.toSet)
+          for (uid <- removed)
+            connectorObjectManager ! ConnectorObjectManagerActor.Removed(uid)
+          reconciliationList = list
+
+          println("finished reconciliation")
+        })
+  }
+}
+
+object ConnectorObjectManagerActor {
+  case class Removed(uid: Uid)
+}
+
+class ConnectorObjectManagerActor extends Actor {
+
+  val objectActors: mutable.Map[Uid, ActorRef] = mutable.Map()
+
+  override def receive: Receive = {
+    case obj: ConnectorObject =>
+      val objActorRef = objectActors.getOrElseUpdate(obj.getUid, createConnectorObjectActor(obj.getUid))
+      objActorRef ! obj
+
+    case Removed(uid) =>
+      val objActorRef = objectActors.getOrElseUpdate(uid, createConnectorObjectActor(uid))
+      objActorRef ! Removed
+      objActorRef ! PoisonPill
+      objectActors - uid
+  }
+
+  private def createConnectorObjectActor(uid: Uid) = context.actorOf(Props(new ConnectorObjectActor(uid)))
+}
+
+object ConnectorObjectActor {
+  object Removed
+}
+
+class ConnectorObjectActor(val uid: Uid) extends Actor {
+
+  var connectorObject: ConnectorObject = _
+
+  override def receive: Receive = {
+    case obj: ConnectorObject =>
+      if (connectorObject == null) {
+        println("New object created: " + obj)
+      } else if (!connectorObject.getAttributes.equals(obj.getAttributes)) {
+        println("Object " + obj.getName.getNameValue + " modified")
+      }
+
+      connectorObject = obj
+
+    case Removed =>
+      println("Object " + connectorObject.getName.getNameValue + " deleted")
+      connectorObject = null
   }
 }
 
@@ -69,8 +134,8 @@ class LdapLiveSyncActor extends Actor {
         syncToken = LdapConnector.getLatestSyncToken("inetOrgPerson")
 
       syncToken = LdapConnector.sync("inetOrgPerson", syncToken, new SynchronizationEventHandler {
-        override def onCreateOrUpdate(resourceObject: ResourceObject): Unit = context.parent ! ResourceObjectAddedCreatedOrUpdated(resourceObject)
-        override def onDelete(resourceObject: ResourceObject): Unit = context.parent ! ResourceObjectDeleted(resourceObject)
+        override def onCreateOrUpdate(resourceObject: MyConnectorObject): Unit = context.parent ! ResourceObjectAddedCreatedOrUpdated(resourceObject)
+        override def onDelete(resourceObject: MyConnectorObject): Unit = context.parent ! ResourceObjectDeleted(resourceObject)
       })
   }
 }

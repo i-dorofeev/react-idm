@@ -1,9 +1,9 @@
 package com.dorofeev.sandbox.reactidm.core
 
-import com.dorofeev.sandbox.reactidm.core.Main.ResourceObject
+import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
 
 case class ReconcileCmd()
-case class ReconciliationObject(resourceObject: ResourceObject)
+case class ReconciliationObject(resourceObject: MyConnectorObject)
 case class ReconciliationFinished()
-case class ResourceObjectAddedCreatedOrUpdated(resourceObject: ResourceObject)
-case class ResourceObjectDeleted(resourceObject: ResourceObject)
+case class ResourceObjectAddedCreatedOrUpdated(resourceObject: MyConnectorObject)
+case class ResourceObjectDeleted(resourceObject: MyConnectorObject)
