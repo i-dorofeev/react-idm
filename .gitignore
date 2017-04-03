@@ -4,3 +4,4 @@ db.mv.db
 .idea/*
 target/
 backend/.idea/*
+*.db

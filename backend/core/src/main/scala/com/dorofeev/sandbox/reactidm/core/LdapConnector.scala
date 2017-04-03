@@ -6,7 +6,7 @@ import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
 import org.identityconnectors.common.IOUtil
 import org.identityconnectors.common.security.GuardedString
 import org.identityconnectors.framework.api._
-import org.identityconnectors.framework.api.operations.{SearchApiOp, SyncApiOp}
+import org.identityconnectors.framework.api.operations.{SchemaApiOp, SearchApiOp, SyncApiOp}
 import org.identityconnectors.framework.common.objects.SyncDeltaType.{CREATE_OR_UPDATE, DELETE}
 import org.identityconnectors.framework.common.objects.{SyncDelta, _}
 import org.identityconnectors.framework.spi.SearchResultsHandler
@@ -43,7 +43,9 @@ object LdapConnector {
     connector = ConnectorFacadeFactory.getInstance.newInstance(apiConfig)
   }
 
-  def search(objectClass: String, onConnectorObject: org.identityconnectors.framework.common.objects.ConnectorObject => Unit, onFinished: () => Unit): Unit = {
+  def search(objectClass: String, onConnectorObject: SConnectorObject => Unit, onFinished: () => Unit): Unit = {
+    implicit val schemaObj = schema()
+
     val searchApiOp = connector.getOperation(classOf[SearchApiOp]).asInstanceOf[SearchApiOp]
     searchApiOp.search(new ObjectClass(objectClass), null,
       new SearchResultsHandler {
@@ -52,7 +54,7 @@ object LdapConnector {
         }
 
         override def handle(connectorObject: org.identityconnectors.framework.common.objects.ConnectorObject): Boolean = {
-          onConnectorObject(connectorObject)
+          onConnectorObject(SConnectorObject(connectorObject))
           true
         }
       }, null)
@@ -73,11 +75,19 @@ object LdapConnector {
 
           case DELETE =>
             synchronizationEventHandler.onDelete(asResourceObject(syncDelta))
+
+          case _ =>
+            // do nothing
         }
 
         true
       }
     }, null)
+  }
+
+  private def schema() = {
+    val schemaApiOp = connector.getOperation(classOf[SchemaApiOp]).asInstanceOf[SchemaApiOp]
+    schemaApiOp.schema()
   }
 
   private def asResourceObject(syncDelta: SyncDelta) = MyConnectorObject(syncDelta.getUid.getUidValue, "", syncDelta.getObjectClass.getObjectClassValue)

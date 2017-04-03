@@ -1,22 +1,55 @@
 package com.dorofeev.sandbox.reactidm.core
 
-import akka.actor.{Actor, ActorRef, Cancellable, PoisonPill, Props}
+import akka.actor.{Actor, ActorRef, Cancellable, PoisonPill, Props, Stash}
 import com.dorofeev.sandbox.reactidm.core.ConnectorObjectManagerActor.Removed
 import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
-import org.identityconnectors.framework.common.objects.{ConnectorObject, SyncToken, Uid}
+import org.identityconnectors.framework.common.objects.SyncToken
+import slick.jdbc.H2Profile
+import slick.jdbc.H2Profile.api._
+import slick.jdbc.meta.MTable
+import slick.lifted.TableQuery
 
 import scala.collection.mutable
 import scala.concurrent.duration._
+import scala.concurrent.{Await, Future}
 import scala.language.postfixOps
+import scala.util.{Failure, Success}
 
 object LdapActorInternalCommands {
 
+}
+
+object LdapActor {
+
+  import scala.concurrent.ExecutionContext.Implicits.global
+
+  val connectorObjects: TableQuery[ConnectorObjects] = TableQuery[ConnectorObjects]
+  val tables = List(connectorObjects)
+
+  val db: H2Profile.backend.Database = Database.forConfig("db")
+
+  private val existingTables = db.run(MTable.getTables)
+  private val ddlStatements = existingTables.map(t => {
+    val names = t.map(mt => mt.name.name)
+    tables.filter(table =>
+      !names.contains(table.baseTableRow.tableName)).map(_.schema.create)
+  })
+
+  /*
+  private val setup = DBIO.seq(
+    connectorObjects.schema.create
+  )
+  */
+
+  def setupDb: Future[Unit] = ddlStatements.map(stmts => db.run(DBIO.sequence(stmts)))
 }
 
 class LdapActor() extends Actor {
 
   override def preStart(): Unit = {
     LdapConnector.initConnector()
+
+    Await.result(LdapActor.setupDb, 5 seconds)
 
     val connectorObjectManagerActor = context.actorOf(Props(new ConnectorObjectManagerActor()))
     context.actorOf(Props(new ReconciliationActor(connectorObjectManagerActor)))
@@ -36,7 +69,7 @@ class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
   import context.dispatcher
 
   var tick: Cancellable = _
-  var reconciliationList: List[Uid] = List()
+  var reconciliationList: List[SAttributeUid] = List()
 
   override def preStart(): Unit = {
     tick = context.system.scheduler.schedule(1 seconds, 5 seconds, self, ReconcileCmd)
@@ -46,13 +79,13 @@ class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
   override def receive: Receive = {
     case ReconcileCmd =>
 
-      var list = List[Uid]()
-      
+      var list = List[SAttributeUid]()
+
       println("starting reconciliation...")
 
       LdapConnector.search("inetOrgPerson",
         connectorObject => {
-          list = connectorObject.getUid :: list
+          list = connectorObject.uid :: list
           connectorObjectManager ! connectorObject
         },
         () => {
@@ -67,16 +100,36 @@ class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
 }
 
 object ConnectorObjectManagerActor {
-  case class Removed(uid: Uid)
+  case class Removed(uid: SAttributeUid)
 }
 
-class ConnectorObjectManagerActor extends Actor {
+class ConnectorObjectManagerActor extends Actor with Stash {
 
-  val objectActors: mutable.Map[Uid, ActorRef] = mutable.Map()
+  import context.dispatcher
+
+  val objectActors: mutable.Map[SAttributeUid, ActorRef] = mutable.Map()
+  val persistence: H2LdapActorPersistence = new H2LdapActorPersistence
+
+  private def stashing: Receive = {
+    case _ => stash()
+  }
+
+  override def preStart(): Unit = {
+
+    context become stashing
+    persistence.setupDb.onComplete {
+      case Success(_) =>
+        context.unbecome()
+        unstashAll
+      case Failure(ex) => println("==> Failed to initialize db: " + ex)
+    }
+
+    super.preStart()
+  }
 
   override def receive: Receive = {
-    case obj: ConnectorObject =>
-      val objActorRef = objectActors.getOrElseUpdate(obj.getUid, createConnectorObjectActor(obj.getUid))
+    case obj: SConnectorObject =>
+      val objActorRef = objectActors.getOrElseUpdate(obj.uid, createConnectorObjectActor(obj.uid))
       objActorRef ! obj
 
     case Removed(uid) =>
@@ -86,29 +139,58 @@ class ConnectorObjectManagerActor extends Actor {
       objectActors - uid
   }
 
-  private def createConnectorObjectActor(uid: Uid) = context.actorOf(Props(new ConnectorObjectActor(uid)))
+  private def createConnectorObjectActor(uid: SAttributeUid) = context.actorOf(Props(new ConnectorObjectActor(uid, persistence)))
 }
 
 object ConnectorObjectActor {
   object Removed
 }
 
-class ConnectorObjectActor(val uid: Uid) extends Actor {
+class ConnectorObjectActor(val uid: SAttributeUid, val persistence: LdapActorPersistence) extends Actor with Async {
 
-  var connectorObject: ConnectorObject = _
+  import context.dispatcher
+
+  var connectorObject: SConnectorObject = _
+
+  override def preStart(): Unit = {
+
+    async(persistence.restore(uid)).onComplete {
+      case Success(Some(obj)) => connectorObject = obj
+      case Success(_) => // do nothing
+      case Failure(ex) => println("==> Failed to query db for uid=" + uid + ": " + ex)
+    }
+
+    super.preStart()
+  }
 
   override def receive: Receive = {
-    case obj: ConnectorObject =>
+    case obj: SConnectorObject =>
       if (connectorObject == null) {
-        println("New object created: " + obj)
-      } else if (!connectorObject.getAttributes.equals(obj.getAttributes)) {
-        println("Object " + obj.getName.getNameValue + " modified")
+        println("Received object created: " + obj)
+
+        async(persistence.persist(obj)).onComplete {
+            case Success(_) => println("Inserted connector object with uid=" + uid.value)
+            case Failure(ex) => println("==> Failed to insert new connector obj for uid=" + uid + ": " + ex)
+        }
+      } else if (!connectorObject.attributes.equals(obj.attributes)) {
+        println("Object " + obj.name.value + " modified")
+
+        async(persistence.update(obj)).onComplete {
+            case Success(_) => println("Updated connector object for uid=" + uid.value)
+            case Failure(ex) => println("===> Failed to update connector obj for uid=" + uid.value + ": " + ex)
+        }
       }
 
       connectorObject = obj
 
     case Removed =>
-      println("Object " + connectorObject.getName.getNameValue + " deleted")
+      println("Object " + connectorObject.name.value + " deleted")
+
+      async(persistence.delete(uid)).onComplete {
+          case Success(_) => println("Deleted connector object for uid=" + uid.value)
+          case Failure(ex) => println("==> Failed to delete connector obj for uid=" + uid.value + ": " + ex)
+      }
+
       connectorObject = null
   }
 }
@@ -139,6 +221,8 @@ class LdapLiveSyncActor extends Actor {
       })
   }
 }
+
+
 
 
 

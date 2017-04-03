@@ -14,3 +14,15 @@ libraryDependencies ++= Seq(
 )
 
 libraryDependencies += "org.slf4j" % "slf4j-api" % "1.7.24"
+
+libraryDependencies ++= Seq(
+  "com.typesafe.slick" %% "slick" % "3.2.0",
+  "org.slf4j" % "slf4j-nop" % "1.6.4",
+  "com.typesafe.slick" %% "slick-hikaricp" % "3.2.0"
+)
+
+libraryDependencies += "com.h2database" % "h2" % "1.4.194" % "runtime"
+
+libraryDependencies += "org.json4s" % "json4s-jackson_2.11" % "3.5.1"
+libraryDependencies += "org.json4s" % "json4s-native_2.11" % "3.5.1"
+
