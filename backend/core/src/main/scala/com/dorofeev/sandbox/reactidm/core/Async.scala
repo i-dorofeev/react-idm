@@ -9,7 +9,7 @@ trait Async extends Stash {
 
   import context.dispatcher
 
-  def async[A](future: Future[A]): Future[A] = {
+  def async[A](future: => Future[A]): Future[A] = {
     context become stashing
     future andThen {
       case Success(_) =>
