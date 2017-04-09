@@ -10,3 +10,11 @@ class ConnectorObjects(tag: Tag) extends Table[(String, String)](tag, "connector
 
   def * = (uid, obj)
 }
+
+class Reconciliation(tag: Tag) extends Table[(String, String)](tag, "reconciliation") {
+
+  def uid = column[String]("uid", O.PrimaryKey)
+  def reconciliationId = column[String]("reconciliation_id")
+
+  def * = (uid, reconciliationId)
+}

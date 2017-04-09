@@ -2,6 +2,7 @@ package com.dorofeev.sandbox.reactidm.core
 
 import java.io.File
 
+import akka.stream.OverflowStrategy
 import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
 import org.identityconnectors.common.IOUtil
 import org.identityconnectors.common.security.GuardedString
@@ -10,6 +11,8 @@ import org.identityconnectors.framework.api.operations.{SchemaApiOp, SearchApiOp
 import org.identityconnectors.framework.common.objects.SyncDeltaType.{CREATE_OR_UPDATE, DELETE}
 import org.identityconnectors.framework.common.objects.{SyncDelta, _}
 import org.identityconnectors.framework.spi.SearchResultsHandler
+import akka.{NotUsed, stream}
+import akka.stream.scaladsl.{Source, SourceQueue}
 
 object LdapConnector {
 
@@ -58,6 +61,28 @@ object LdapConnector {
           true
         }
       }, null)
+  }
+
+  def stream(objectClass: String): Source[SConnectorObject, NotUsed] = {
+    val source = Source.queue[SConnectorObject](10, OverflowStrategy.backpressure)
+    source.mapMaterializedValue({ queue =>
+      implicit val schemaObj = schema()
+
+      val searchApiOp = connector.getOperation(classOf[SearchApiOp]).asInstanceOf[SearchApiOp]
+      searchApiOp.search(new ObjectClass(objectClass), null,
+        new SearchResultsHandler {
+          override def handleResult(searchResult: SearchResult): Unit = {
+            queue.complete()
+          }
+
+          override def handle(connectorObject: org.identityconnectors.framework.common.objects.ConnectorObject): Boolean = {
+            queue.offer(SConnectorObject(connectorObject))
+            true
+          }
+        }, null)
+
+      NotUsed
+    })
   }
 
   def getLatestSyncToken(objectClass: String): SyncToken = {

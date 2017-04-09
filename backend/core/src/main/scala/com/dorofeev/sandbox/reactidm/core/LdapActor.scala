@@ -1,6 +1,8 @@
 package com.dorofeev.sandbox.reactidm.core
 
+import akka.Done
 import akka.actor.{Actor, ActorRef, Cancellable, PoisonPill, Props}
+import akka.stream.ActorMaterializer
 import com.dorofeev.sandbox.reactidm.core.ConnectorObjectManagerActor.Removed
 import com.dorofeev.sandbox.reactidm.core.Main.MyConnectorObject
 import org.identityconnectors.framework.common.objects.SyncToken
@@ -51,6 +53,23 @@ class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
 
       println("starting reconciliation...")
 
+      implicit val materializer = ActorMaterializer()
+
+      LdapConnector.stream("inetOrgPerson")
+        .runForeach({ co =>
+          list = co.uid :: list
+          connectorObjectManager ! co
+        })
+        .onSuccess({ case Done =>
+            val removed = reconciliationList.filterNot(list.toSet)
+            for (uid <- removed)
+              connectorObjectManager ! ConnectorObjectManagerActor.Removed(uid)
+            reconciliationList = list
+
+            println("finished reconciliation")
+        })
+
+      /*
       LdapConnector.search("inetOrgPerson",
         connectorObject => {
           list = connectorObject.uid :: list
@@ -64,6 +83,7 @@ class ReconciliationActor(val connectorObjectManager: ActorRef) extends Actor {
 
           println("finished reconciliation")
         })
+        */
   }
 }
 

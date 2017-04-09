@@ -1,4 +1,7 @@
 package com.dorofeev.sandbox.reactidm.core
+import akka.NotUsed
+import akka.stream.scaladsl._
+import com.dorofeev.sandbox.reactidm.core.SlickStreaming._
 import org.json4s._
 import org.json4s.native.Serialization
 import org.json4s.native.Serialization.{read, write}
@@ -15,13 +18,15 @@ class H2LdapActorPersistence extends LdapActorPersistence {
   import scala.concurrent.ExecutionContext.Implicits.global
 
   private val connectorObjects: TableQuery[ConnectorObjects] = TableQuery[ConnectorObjects]
+  private val reconciliation: TableQuery[Reconciliation] = TableQuery[Reconciliation]
+
   private val db: H2Profile.backend.Database = Database.forConfig("db")
 
   private implicit val formats = Serialization.formats(ShortTypeHints(
     List(classOf[SAttributeUid], classOf[SAttributeName], classOf[SAttributeString], classOf[SAttributeInt])))
 
   def setupDb: Future[Unit] = {
-    val tables = List(connectorObjects)
+    val tables = List(connectorObjects, reconciliation)
 
     val existingTables = db.run(MTable.getTables)
 
@@ -39,6 +44,12 @@ class H2LdapActorPersistence extends LdapActorPersistence {
         case Some((_, objJson)) => Some(read[SConnectorObject](objJson))
         case None => None
       }
+  }
+
+  def reconciliationSink(reconciliationId: String): Sink[SConnectorObject, NotUsed] = {
+    Flow[SConnectorObject]
+      .map { connectorObject => (connectorObject.uid.value, reconciliationId) }
+      .toMat(dbSink(reconciliation.insertOrUpdate(_), 10))(Keep.none)
   }
 
   override def persist(connectorObject: SConnectorObject): Future[Unit] = {
